@@ -20,7 +20,7 @@ Built because phpMyAdmin's native import is painfully slow for large SQL files. 
 
 - Windows 10 or 11
 - [XAMPP](https://www.apachefriends.org/) installed with MySQL running
-- .NET 8 SDK _(only needed to build — the final `.exe` is self-contained)_
+- .NET 8 SDK *(only needed to build — the final `.exe` is self-contained)*
 
 ---
 
@@ -48,13 +48,13 @@ Double-click `SqlImporter.exe`. On first launch it will:
 
 ## Usage
 
-| Field                | Description                                                                 |
-| -------------------- | --------------------------------------------------------------------------- |
+| Field | Description |
+|---|---|
 | **MySQL Executable** | Path to `mysql.exe`. Auto-detected on startup. Use Browse… to set manually. |
-| **Username**         | MySQL username. Default is `root`.                                          |
-| **Password**         | MySQL password. Leave blank if you haven't set one (default XAMPP setup).   |
-| **Database**         | Dropdown of available databases. Click **↻ Refresh** to reload.             |
-| **SQL File**         | The `.sql` file to import. Click **Browse…** to select.                     |
+| **Username** | MySQL username. Default is `root`. |
+| **Password** | MySQL password. Leave blank if you haven't set one (default XAMPP setup). |
+| **Database** | Dropdown of available databases. Click **↻ Refresh** to reload. |
+| **SQL File** | The `.sql` file to import. Click **Browse…** to select. |
 
 Once everything is filled in, click **▶ Run Import**. The output log will show live feedback and a green ✔ (or red ✘) when done.
 

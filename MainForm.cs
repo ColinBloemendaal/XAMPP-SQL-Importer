@@ -22,10 +22,11 @@ namespace SqlImporter
         private TextBox     txtUsername  = null!;
         private TextBox     txtPassword  = null!;
         private TextBox     txtSqlFile   = null!;
-        private Button      btnImport    = null!;
-        private Button      btnRefreshDb = null!;
-        private RichTextBox rtbLog       = null!;
-        private Label       lblStatus    = null!;
+        private Button      btnImport        = null!;
+        private Button      btnRefreshDb     = null!;
+        private CheckBox    chkSelfContained = null!;
+        private RichTextBox rtbLog           = null!;
+        private Label       lblStatus        = null!;
 
         // ── Colours ───────────────────────────────────────────────────────────
         private static readonly Color BgDark       = Color.FromArgb( 18,  18,  24);
@@ -211,8 +212,28 @@ namespace SqlImporter
             txtPassword = AddTextBox(card, cx + 160, 98, 150, "");
             txtPassword.UseSystemPasswordChar = true;
 
-            // Row 2: Database dropdown
-            AddFieldLabel(card, "Database", cx, 142);
+            // Row 2: Database dropdown + self-contained toggle
+            var lblDb = AddFieldLabel(card, "Database", cx, 142);
+            chkSelfContained = new CheckBox
+            {
+                Text      = "SQL file creates its own database",
+                Location  = new Point(cx + 220, 140),
+                AutoSize  = true,
+                ForeColor = TextMuted,
+                BackColor = Color.Transparent,
+                Font      = new Font("Segoe UI", 8.5f),
+                Cursor    = Cursors.Hand
+            };
+            chkSelfContained.CheckedChanged += (s, e) =>
+            {
+                bool self = chkSelfContained.Checked;
+                cboDatabase.Enabled  = !self;
+                btnRefreshDb.Enabled = !self;
+                cboDatabase.BackColor  = self ? Color.FromArgb(28, 28, 36) : BgInput;
+                chkSelfContained.ForeColor = self ? AccentOrange : TextMuted;
+            };
+            card.Controls.Add(chkSelfContained);
+
             cboDatabase = new ComboBox
             {
                 Location      = new Point(cx, 160),
@@ -431,15 +452,17 @@ namespace SqlImporter
             string passwordArg = string.IsNullOrWhiteSpace(password) ? "" : $"-p{password}";
 
             if (!File.Exists(mysqlPath))             { SetStatus("mysql.exe not found.",     AccentRed); return; }
-            if (string.IsNullOrWhiteSpace(database)) { SetStatus("Please select a database.", AccentRed); return; }
+            if (!chkSelfContained.Checked && string.IsNullOrWhiteSpace(database)) { SetStatus("Please select a database, or tick 'SQL file creates its own database'.", AccentRed); return; }
             if (!File.Exists(sqlFile))               { SetStatus("SQL file not found.",       AccentRed); return; }
 
-            string cmdArgs = $"/c \"\"{mysqlPath}\" -u {username} {passwordArg} {database} < \"{sqlFile}\"\"";
+            // If self-contained, omit the database name from the command
+            string dbArg   = chkSelfContained.Checked ? "" : database;
+            string cmdArgs = $"/c \"\"{mysqlPath}\" -u {username} {passwordArg} {dbArg} < \"{sqlFile}\"\"";
 
             btnImport.Enabled = false;
             rtbLog.Clear();
             SetStatus("Importing…", AccentOrange);
-            LogLine($"[INFO]  {DateTime.Now:HH:mm:ss}  Importing into [{database}]", TextMuted);
+            LogLine($"[INFO]  {DateTime.Now:HH:mm:ss}  {(chkSelfContained.Checked ? "Importing (script creates its own database)" : $"Importing into [{database}]")}", TextMuted);
             LogLine($"[FILE]  {sqlFile}", TextMuted);
             LogLine("", TextMuted);
 
