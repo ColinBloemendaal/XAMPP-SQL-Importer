@@ -10,6 +10,20 @@
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ApplicationIcon>assets\app.ico</ApplicationIcon>
+    <AssemblyTitle>XAMPP SQL Importer</AssemblyTitle>
+    <Product>XAMPP SQL Importer</Product>
+    <Description>Fast command-line SQL import tool for XAMPP MySQL</Description>
+    <Company>ColinBloemendaal</Company>
+    <Copyright>Copyright © 2025 ColinBloemendaal</Copyright>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="assets\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>

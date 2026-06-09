@@ -158,6 +158,7 @@ namespace SqlImporter
         {
             Text            = "XAMPP SQL Importer";
             ClientSize      = new Size(680, 646);
+            try { Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "app.ico")); } catch { }
             MinimumSize     = new Size(680, 646);
             BackColor       = BgDark;
             ForeColor       = TextPrimary;
