@@ -1,0 +1,49 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compute version
+        id: ver
+        shell: pwsh
+        run: |
+          $base = ([xml](Get-Content SqlImporter.csproj)).Project.PropertyGroup.Version
+          $full = "$base.${{ github.run_number }}"
+          "FULL=$full" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish SqlImporter.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:Version="${{ steps.ver.outputs.FULL }}" `
+            -p:FileVersion="${{ steps.ver.outputs.FULL }}" `
+            -o publish
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.FULL }}
+          name: v${{ steps.ver.outputs.FULL }}
+          generate_release_notes: true
+          files: publish/SqlImporter.exe
