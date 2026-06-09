@@ -157,8 +157,8 @@ namespace SqlImporter
         private void BuildUI()
         {
             Text            = "XAMPP SQL Importer";
-            ClientSize      = new Size(680, 630);
-            MinimumSize     = new Size(680, 630);
+            ClientSize      = new Size(680, 646);
+            MinimumSize     = new Size(680, 646);
             BackColor       = BgDark;
             ForeColor       = TextPrimary;
             Font            = new Font("Segoe UI", 9.5f);
@@ -173,7 +173,7 @@ namespace SqlImporter
             Controls.Add(pnlTop);
 
             // ── Settings card ────────────────────────────────────────────────
-            var card = MakeCard(new Point(20, 82), new Size(640, 318));
+            var card = MakeCard(new Point(20, 82), new Size(640, 334));
             int cx = 18;
 
             // Row 0: MySQL path
@@ -217,7 +217,7 @@ namespace SqlImporter
             chkSelfContained = new CheckBox
             {
                 Text      = "SQL file creates its own database",
-                Location  = new Point(cx + 220, 140),
+                Location  = new Point(cx, 192),
                 AutoSize  = true,
                 ForeColor = TextMuted,
                 BackColor = Color.Transparent,
@@ -250,17 +250,17 @@ namespace SqlImporter
             btnRefreshDb.Click += async (s, e) => await LoadDatabasesAsync();
 
             // Row 3: SQL File
-            AddFieldLabel(card, "SQL File", cx, 204);
-            txtSqlFile = AddTextBox(card, cx, 222, 490, "");
+            AddFieldLabel(card, "SQL File", cx, 220);
+            txtSqlFile = AddTextBox(card, cx, 238, 490, "");
             txtSqlFile.PlaceholderText = "Browse… to select a .sql file";
-            var btnBrowseSql = AddSmallButton(card, cx + 496, 221, "Browse…");
+            var btnBrowseSql = AddSmallButton(card, cx + 496, 237, "Browse…");
             btnBrowseSql.Click += (s, e) => BrowseFile(txtSqlFile, "SQL Files|*.sql|All Files|*.*");
 
             // Import button
             btnImport = new Button
             {
                 Text      = "▶   Run Import",
-                Location  = new Point(cx, 264),
+                Location  = new Point(cx, 280),
                 Size      = new Size(604, 44),
                 BackColor = AccentOrange,
                 ForeColor = Color.White,
@@ -277,7 +277,7 @@ namespace SqlImporter
             // ── Status label ─────────────────────────────────────────────────
             lblStatus = new Label
             {
-                Location  = new Point(22, 410),
+                Location  = new Point(22, 426),
                 Size      = new Size(640, 20),
                 ForeColor = TextMuted,
                 Text      = "Starting…",
@@ -286,7 +286,7 @@ namespace SqlImporter
             Controls.Add(lblStatus);
 
             // ── Log card ─────────────────────────────────────────────────────
-            var pnlLog = MakeCard(new Point(20, 436), new Size(640, 172));
+            var pnlLog = MakeCard(new Point(20, 452), new Size(640, 172));
             pnlLog.Controls.Add(new Label { Text = "OUTPUT", Location = new Point(14, 10), AutoSize = true, Font = new Font("Consolas", 7.5f, FontStyle.Bold), ForeColor = TextMuted });
             rtbLog = new RichTextBox
             {
