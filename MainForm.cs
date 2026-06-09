@@ -48,10 +48,34 @@ namespace SqlImporter
             BuildUI();
             Shown += async (s, e) =>
             {
+                CreateStartMenuShortcutIfMissing();
                 LoadConfig();
                 AutoDetectMysql();
                 await LoadDatabasesAsync();
             };
+        }
+
+        private static void CreateStartMenuShortcutIfMissing()
+        {
+            try
+            {
+                string shortcutPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                    "XAMPP SQL Importer.lnk");
+
+                if (File.Exists(shortcutPath)) return;
+
+                string exePath = Process.GetCurrentProcess().MainModule!.FileName;
+
+                dynamic shell    = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+                dynamic shortcut = shell.CreateShortcut(shortcutPath);
+                shortcut.TargetPath       = exePath;
+                shortcut.WorkingDirectory = Path.GetDirectoryName(exePath);
+                shortcut.Description      = "Fast command-line SQL import tool for XAMPP MySQL";
+                shortcut.IconLocation     = $"{exePath},0";
+                shortcut.Save();
+            }
+            catch { }
         }
 
         // ─────────────────────────────────────────────────────────────────────
