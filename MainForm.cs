@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace SqlImporter
 {
@@ -48,34 +51,10 @@ namespace SqlImporter
             BuildUI();
             Shown += async (s, e) =>
             {
-                CreateStartMenuShortcutIfMissing();
                 LoadConfig();
                 AutoDetectMysql();
                 await LoadDatabasesAsync();
             };
-        }
-
-        private static void CreateStartMenuShortcutIfMissing()
-        {
-            try
-            {
-                string shortcutPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-                    "XAMPP SQL Importer.lnk");
-
-                if (File.Exists(shortcutPath)) return;
-
-                string exePath = Process.GetCurrentProcess().MainModule!.FileName;
-
-                dynamic shell    = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
-                dynamic shortcut = shell.CreateShortcut(shortcutPath);
-                shortcut.TargetPath       = exePath;
-                shortcut.WorkingDirectory = Path.GetDirectoryName(exePath);
-                shortcut.Description      = "Fast command-line SQL import tool for XAMPP MySQL";
-                shortcut.IconLocation     = $"{exePath},0";
-                shortcut.Save();
-            }
-            catch { }
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -182,7 +161,7 @@ namespace SqlImporter
         {
             Text            = "XAMPP SQL Importer";
             ClientSize      = new Size(680, 646);
-            try { Icon = new Icon(Path.Combine(AppContext.BaseDirectory, "assets", "app.ico")); } catch { }
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             MinimumSize     = new Size(680, 646);
             BackColor       = BgDark;
             ForeColor       = TextPrimary;
@@ -601,13 +580,234 @@ namespace SqlImporter
 
     static class Program
     {
+        private static readonly string InstallDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "XAMPP SQL Importer");
+
+        private static readonly string InstallExe = Path.Combine(InstallDir, "SqlImporter.exe");
+
+        private const string UninstallRegKey =
+            @"Software\Microsoft\Windows\CurrentVersion\Uninstall\XamppSqlImporter";
+
+        // Stable identity that ties the running process to the pinned taskbar shortcut
+        private const string AppId = "ColinBloemendaal.XamppSqlImporter";
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern void SetCurrentProcessExplicitAppUserModelID(string appId);
+
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            SetCurrentProcessExplicitAppUserModelID(AppId);
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
+
+            if (Array.Exists(args, a => a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase)))
+            {
+                RunUninstall();
+                return;
+            }
+
+            string currentExe = Process.GetCurrentProcess().MainModule!.FileName;
+            bool runningFromInstallDir = string.Equals(
+                Path.GetFullPath(currentExe), Path.GetFullPath(InstallExe),
+                StringComparison.OrdinalIgnoreCase);
+
+            if (!runningFromInstallDir)
+            {
+                bool alreadyInstalled = File.Exists(InstallExe);
+                string msg = alreadyInstalled
+                    ? "Update the existing XAMPP SQL Importer installation?"
+                    : "Install XAMPP SQL Importer to your Programs folder?\n\nThe app will be available from Start and can be uninstalled from Settings.";
+
+                var answer = MessageBox.Show(msg, "XAMPP SQL Importer Setup",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1);
+
+                if (answer == DialogResult.Yes)
+                {
+                    RunInstall(currentExe);
+                    return;
+                }
+            }
+
             Application.Run(new MainForm());
+        }
+
+        // ── Install ───────────────────────────────────────────────────────────
+        private static void RunInstall(string sourceExe)
+        {
+            try
+            {
+                Directory.CreateDirectory(InstallDir);
+                File.Copy(sourceExe, InstallExe, overwrite: true);
+
+                RegisterUninstaller();
+                CreateStartMenuShortcut(InstallExe);
+
+                Process.Start(new ProcessStartInfo(InstallExe) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Installation failed:\n{ex.Message}", "Setup Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static void RegisterUninstaller()
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(UninstallRegKey);
+            key.SetValue("DisplayName",          "XAMPP SQL Importer");
+            key.SetValue("DisplayIcon",          $"{InstallExe},0");
+            key.SetValue("UninstallString",      $"\"{InstallExe}\" /uninstall");
+            key.SetValue("QuietUninstallString", $"\"{InstallExe}\" /uninstall /quiet");
+            key.SetValue("Publisher",            "ColinBloemendaal");
+            key.SetValue("DisplayVersion",       "1.0.0");
+            key.SetValue("InstallDate",          DateTime.Now.ToString("yyyyMMdd"));
+            key.SetValue("InstallLocation",      InstallDir);
+            key.SetValue("NoModify",  1, RegistryValueKind.DWord);
+            key.SetValue("NoRepair",  1, RegistryValueKind.DWord);
+            key.SetValue("EstimatedSize",
+                (int)(new FileInfo(InstallExe).Length / 1024), RegistryValueKind.DWord);
+        }
+
+        // Creates the .lnk with an AppUserModelID so the taskbar icon matches the running process
+        private static void CreateStartMenuShortcut(string exePath)
+        {
+            string shortcutPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                "XAMPP SQL Importer.lnk");
+
+            var link = (IShellLinkW)new CShellLink();
+            link.SetPath(exePath);
+            link.SetWorkingDirectory(InstallDir);
+            link.SetDescription("Fast command-line SQL import tool for XAMPP MySQL");
+            link.SetIconLocation(exePath, 0);
+
+            // Stamp the same AppId so Windows groups the shortcut with the running process
+            var store = (IPropertyStore)link;
+            var key   = new PROPERTYKEY
+            {
+                fmtid = new Guid("{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}"),
+                pid   = 5
+            };
+            IntPtr pStr = Marshal.StringToCoTaskMemUni(AppId);
+            try
+            {
+                var pv = new PROPVARIANT { vt = 31 /* VT_LPWSTR */, pwszVal = pStr };
+                store.SetValue(ref key, ref pv);
+                store.Commit();
+            }
+            finally { Marshal.FreeCoTaskMem(pStr); }
+
+            ((IPersistFile)link).Save(shortcutPath, true);
+        }
+
+        // ── Uninstall ─────────────────────────────────────────────────────────
+        private static void RunUninstall()
+        {
+            var answer = MessageBox.Show(
+                "Are you sure you want to uninstall XAMPP SQL Importer?",
+                "Uninstall", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (answer != DialogResult.Yes) return;
+
+            try
+            {
+                string shortcut = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                    "XAMPP SQL Importer.lnk");
+                if (File.Exists(shortcut)) File.Delete(shortcut);
+
+                Registry.CurrentUser.DeleteSubKey(UninstallRegKey, throwOnMissingSubKey: false);
+
+                string bat = Path.Combine(Path.GetTempPath(), "xampp_sql_uninstall.bat");
+                File.WriteAllText(bat,
+                    $"@echo off\r\n" +
+                    $"ping -n 3 127.0.0.1 >nul\r\n" +
+                    $"rd /s /q \"{InstallDir}\"\r\n" +
+                    $"del \"%~f0\"\r\n");
+
+                Process.Start(new ProcessStartInfo("cmd.exe", $"/c \"{bat}\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow  = true
+                });
+
+                MessageBox.Show("XAMPP SQL Importer has been uninstalled.",
+                    "Uninstalled", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Uninstall error:\n{ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // ── COM interop ───────────────────────────────────────────────────────
+
+        [ComImport, Guid("00021401-0000-0000-C000-000000000046"), ClassInterface(ClassInterfaceType.None)]
+        class CShellLink { }
+
+        [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellLinkW
+        {
+            void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszFile, int cch, IntPtr pfd, uint fFlags);
+            void GetIDList(out IntPtr ppidl);
+            void SetIDList(IntPtr pidl);
+            void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszName, int cch);
+            void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+            void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszDir, int cch);
+            void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+            void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszArgs, int cch);
+            void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+            void GetHotkey(out short pwHotkey);
+            void SetHotkey(short wHotkey);
+            void GetShowCmd(out int piShowCmd);
+            void SetShowCmd(int iShowCmd);
+            void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszIconPath, int cch, out int piIcon);
+            void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+            void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
+            void Resolve(IntPtr hwnd, uint fFlags);
+            void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+        }
+
+        [ComImport, Guid("0000010b-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IPersistFile
+        {
+            void GetClassID(out Guid pClassID);
+            [PreserveSig] int IsDirty();
+            void Load([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, uint dwMode);
+            void Save([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, [MarshalAs(UnmanagedType.Bool)] bool fRemember);
+            void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string pszFileName);
+            void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string ppszFileName);
+        }
+
+        [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IPropertyStore
+        {
+            void GetCount(out uint cProps);
+            void GetAt(uint iProp, out PROPERTYKEY pkey);
+            void GetValue(ref PROPERTYKEY key, out PROPVARIANT pv);
+            void SetValue(ref PROPERTYKEY key, ref PROPVARIANT pv);
+            void Commit();
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        struct PROPERTYKEY
+        {
+            public Guid  fmtid;
+            public uint  pid;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct PROPVARIANT
+        {
+            public ushort vt;
+            ushort r1, r2, r3;  // reserved padding to reach offset 8
+            public IntPtr pwszVal;
         }
     }
 }
